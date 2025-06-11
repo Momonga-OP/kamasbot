@@ -3,6 +3,10 @@ from discord.ext import commands
 import logging
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -36,18 +40,25 @@ bot = commands.Bot(
 
 @bot.event
 async def on_ready():
-    logger.info(f'Bot is ready! Logged in as {bot.user}')
-    
-    # Load cogs
-    await bot.add_cog(PanelCog(bot))
-    await bot.add_cog(TicketsCog(bot))
-    
-    # Sync app commands
     try:
+        logger.info(f'Bot is ready! Logged in as {bot.user}')
+        
+        # Load cogs
+        await bot.add_cog(PanelCog(bot))
+        await bot.add_cog(TicketsCog(bot))
+        
+        # Sync app commands
         await bot.tree.sync()
         logger.info('Application commands synced')
+    except discord.Forbidden as e:
+        logger.error(f'Permission error: {e}')
+        raise
+    except discord.NotFound as e:
+        logger.error(f'Channel or role not found: {e}')
+        raise
     except Exception as e:
-        logger.error(f'Error syncing commands: {e}')
+        logger.error(f'Unexpected error during startup: {e}')
+        raise
 
 if __name__ == '__main__':
     bot.run(os.environ['DISCORD_TOKEN'])
