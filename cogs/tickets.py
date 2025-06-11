@@ -8,8 +8,8 @@ import aiohttp
 from io import BytesIO
 import logging
 
-from ..utils.constants import TICKET_CHANNEL_ID
-from ..utils.utils import *
+from utils.constants import TICKET_CHANNEL_ID
+from utils.utils import *
 
 logger = logging.getLogger(__name__)
 
