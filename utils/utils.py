@@ -5,6 +5,8 @@ import aiohttp
 from io import BytesIO
 import re
 from discord import utils
+from utils.constants import KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID
+import discord
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +64,6 @@ def hash_sensitive_data(data: str) -> str:
     """Hash sensitive data using SHA-256."""
     import hashlib
     return hashlib.sha256(data.encode()).hexdigest()
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(KAMAS_LOGO_URL) as resp:
-                if resp.status == 200:
-                    return await resp.read()
-    except Exception as e:
-        logger.warning(f"Could not fetch Kamas logo: {e}")
-    return None
 
 async def store_verification_data(interaction, user_id, verification_data):
     """Store verification data in the verified sellers channel."""
