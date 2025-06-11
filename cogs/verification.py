@@ -5,8 +5,8 @@ from datetime import datetime
 import os
 import logging
 
-from ..utils.constants import VERIFIED_DATA_CHANNEL_ID
-from ..utils.utils import *
+from utils.constants import VERIFIED_DATA_CHANNEL_ID
+from utils.utils import *
 
 logger = logging.getLogger(__name__)
 
