@@ -5,8 +5,8 @@ from datetime import datetime
 import os
 import logging
 
-from ..utils.constants import PANEL_CHANNEL_ID
-from ..utils.utils import fetch_kamas_logo
+from utils.constants import PANEL_CHANNEL_ID
+from utils.utils import fetch_kamas_logo
 
 logger = logging.getLogger(__name__)
 
