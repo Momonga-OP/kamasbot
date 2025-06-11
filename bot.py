@@ -1,6 +1,11 @@
 import discord
 from discord.ext import commands
 import logging
+import os
+import sys
+
+# Add the project root directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cogs.panel import PanelCog
 from cogs.tickets import TicketsCog
@@ -16,6 +21,12 @@ logger = logging.getLogger(__name__)
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.messages = True
+intents.guilds = True
+
+# Ensure privileged intents are explicitly enabled
+intents.message_content = True  # This is a privileged intent
+intents.members = True  # This is a privileged intent
 
 bot = commands.Bot(
     command_prefix='!',

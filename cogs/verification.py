@@ -5,10 +5,15 @@ from datetime import datetime
 import os
 import logging
 
-from ..utils.constants import VERIFIED_DATA_CHANNEL_ID
-from ..utils.utils import *
+from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL, TICKET_CHANNEL_ID
+from utils.utils import fetch_kamas_logo
 
 logger = logging.getLogger(__name__)
+
+def hash_sensitive_data(data: str) -> str:
+    """Hash sensitive data using SHA-256."""
+    import hashlib
+    return hashlib.sha256(data.encode()).hexdigest()
 
 class VerificationModal(ui.Modal, title="Seller Verification Application"):
     """Modal for seller verification submission."""

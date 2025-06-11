@@ -50,6 +50,20 @@ async def fetch_kamas_logo():
     """Fetch the kamas logo from URL."""
     try:
         async with aiohttp.ClientSession() as session:
+            async with session.get(KAMAS_LOGO_URL) as response:
+                if response.status == 200:
+                    return BytesIO(await response.read())
+                return None
+    except Exception as e:
+        logger.warning(f"Error fetching Kamas logo: {e}")
+        return None
+
+def hash_sensitive_data(data: str) -> str:
+    """Hash sensitive data using SHA-256."""
+    import hashlib
+    return hashlib.sha256(data.encode()).hexdigest()
+    try:
+        async with aiohttp.ClientSession() as session:
             async with session.get(KAMAS_LOGO_URL) as resp:
                 if resp.status == 200:
                     return await resp.read()
