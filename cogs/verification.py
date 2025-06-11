@@ -6,7 +6,7 @@ import os
 import logging
 
 from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL
-from utils.utils import fetch_kamas_logo, hash_sensitive_data
+from utils.utils import fetch_kamas_logo
 
 logger = logging.getLogger(__name__)
 
