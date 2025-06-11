@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.messages = True
+intents.guilds = True
+
+# Ensure privileged intents are explicitly enabled
+intents.message_content = True  # This is a privileged intent
+intents.members = True  # This is a privileged intent
 
 bot = commands.Bot(
     command_prefix='!',
