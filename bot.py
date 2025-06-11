@@ -1,14 +1,9 @@
 import discord
 from discord.ext import commands
 import logging
-import os
-from dotenv import load_dotenv
 
 from cogs.panel import PanelCog
 from cogs.tickets import TicketsCog
-
-# Load environment variables
-load_dotenv()
 
 # Setup logging
 logging.basicConfig(
@@ -44,4 +39,4 @@ async def on_ready():
         logger.error(f'Error syncing commands: {e}')
 
 if __name__ == '__main__':
-    bot.run(os.getenv('DISCORD_TOKEN'))
+    bot.run(os.environ['DISCORD_TOKEN'])
