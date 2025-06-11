@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 import logging
 
-from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL
+from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL, TICKET_CHANNEL_ID
 from utils.utils import fetch_kamas_logo
 
 logger = logging.getLogger(__name__)
