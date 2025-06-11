@@ -8,8 +8,8 @@ import aiohttp
 from io import BytesIO
 import logging
 
-from utils.constants import TICKET_CHANNEL_ID
-from utils.utils import *
+from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS
+from utils.utils import parse_kamas_amount, format_kamas_amount
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,29 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
         required=True,
         max_length=100
     )
+
+class CurrencySelect(ui.Select):
+    """Dropdown menu for selecting currency."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label=f"Euro ({CURRENCY_SYMBOLS['EUR']})",
+                value="EUR",
+                emoji="💶"
+            ),
+            discord.SelectOption(
+                label=f"US Dollar ({CURRENCY_SYMBOLS['USD']})",
+                value="USD",
+                emoji="💵"
+            )
+        ]
+        super().__init__(
+            placeholder="Select currency...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
     
     contact = ui.TextInput(
         label="Contact Info",
