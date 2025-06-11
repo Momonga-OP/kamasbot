@@ -5,8 +5,10 @@ from datetime import datetime
 import os
 import logging
 
-from utils.constants import PANEL_CHANNEL_ID
+from utils.constants import PANEL_CHANNEL_ID, KAMAS_LOGO_URL
 from utils.utils import fetch_kamas_logo
+from cogs.tickets import KamasModal
+from cogs.verification import VerificationModal
 
 logger = logging.getLogger(__name__)
 
