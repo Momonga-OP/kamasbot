@@ -76,7 +76,7 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
                 }
                 
             try:
-                price_per_m = float(self.price_per_million.value.replace(',', '.'))
+                price_per_m = float(self.price.value.replace(',', '.'))
             except ValueError:
                 await interaction.response.send_message(
                     "Invalid price format. Please enter a numeric value.",
@@ -90,8 +90,8 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
                 "kamas_amount_str": format_kamas_amount(kamas_amount),
                 "price_per_m": price_per_m,
                 "payment_method": self.payment_method.value,
-                "contact_info": self.contact_info.value,
-                "additional_info": self.additional_info.value,
+                "contact_info": self.contact.value,
+                "additional_info": self.notes.value,
                 "user_id": interaction.user.id,
                 "payment_split": payment_split
             }
