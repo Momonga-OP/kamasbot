@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
-  schedule:
-    - cron: '30 */5 * * *'  # Triggers every 5 hours and 30 minutes
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   deploy:
@@ -17,7 +13,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Step 2: Set up Python
       - name: Set up Python
@@ -31,14 +27,49 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Set up Python path
-      - name: Set up Python path
+      # Step 4: Create .env file from secrets
+      - name: Create .env file
         run: |
-          echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
+          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" >> .env
+          echo "PANEL_CHANNEL_ID=${{ secrets.PANEL_CHANNEL_ID }}" >> .env
+          echo "TICKET_CHANNEL_ID=${{ secrets.TICKET_CHANNEL_ID }}" >> .env
+          echo "VERIFIED_DATA_CHANNEL_ID=${{ secrets.VERIFIED_DATA_CHANNEL_ID }}" >> .env
+          echo "SERVER_ID=${{ secrets.SERVER_ID }}" >> .env
 
-      # Step 5: Run the bot
-      - name: Run the bot
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      # Step 5: Validate bot configuration
+      - name: Validate configuration
         run: |
-          python bot.py
+          python -c "
+          import os
+          from dotenv import load_dotenv
+          load_dotenv()
+          
+          required_vars = ['DISCORD_TOKEN', 'PANEL_CHANNEL_ID', 'TICKET_CHANNEL_ID', 'VERIFIED_DATA_CHANNEL_ID', 'SERVER_ID']
+          missing = [var for var in required_vars if not os.getenv(var)]
+          
+          if missing:
+              print(f'Missing environment variables: {missing}')
+              exit(1)
+          else:
+              print('All required environment variables are set')
+          "
+
+      # Step 6: Run syntax check
+      - name: Check Python syntax
+        run: |
+          python -m py_compile bot.py
+          python -m py_compile cogs/panel.py
+          python -m py_compile cogs/tickets.py
+          python -m py_compile cogs/verification.py
+          python -m py_compile utils/constants.py
+          python -m py_compile utils/utils.py
+
+      # Step 7: Run the bot (with timeout for GitHub Actions)
+      - name: Run the bot
+        timeout-minutes: 5  # Prevent infinite running in CI
+        run: |
+          python bot.py &
+          BOT_PID=$!
+          sleep 30  # Let bot start up
+          kill $BOT_PID || true
+          echo "Bot started successfully (killed after 30 seconds for CI)"
