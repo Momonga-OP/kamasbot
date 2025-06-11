@@ -13,75 +13,64 @@ from utils.utils import parse_kamas_amount, format_kamas_amount
 
 logger = logging.getLogger(__name__)
 
-class KamasModal(ui.Modal, title="Kamas Transaction Details"):
+class KamasModal(ui.Modal):
     """Modal form for kamas transactions."""
     
-    amount = ui.TextInput(
-        label="Kamas Amount",
-        placeholder="Enter amount (e.g. 10M)",
-        required=True,
-        max_length=20
-    )
-    
-    price = ui.TextInput(
-        label="Price per Million",
-        placeholder="Enter price (e.g. 5)",
-        required=True,
-        max_length=20
-    )
-    
-    payment_method = ui.TextInput(
-        label="Payment Method",
-        placeholder="e.g. PayPal, Bank Transfer",
-        required=True,
-        max_length=100
-    )
-
-class CurrencySelect(ui.Select):
-    """Dropdown menu for selecting currency."""
-    
-    def __init__(self):
-        options = [
-            discord.SelectOption(
-                label=f"Euro ({CURRENCY_SYMBOLS['EUR']})",
-                value="EUR",
-                emoji="💶"
-            ),
-            discord.SelectOption(
-                label=f"US Dollar ({CURRENCY_SYMBOLS['USD']})",
-                value="USD",
-                emoji="💵"
-            )
-        ]
-        super().__init__(
-            placeholder="Select currency...",
-            min_values=1,
-            max_values=1,
-            options=options
-        )
-    
-    contact = ui.TextInput(
-        label="Contact Info",
-        placeholder="Discord tag or contact info",
-        required=True,
-        max_length=100
-    )
-    
-    notes = ui.TextInput(
-        label="Additional Notes",
-        placeholder="Any important details...",
-        required=False,
-        style=discord.TextStyle.paragraph,
-        max_length=500
-    )
-    
     def __init__(self, transaction_type):
-        super().__init__()
+        super().__init__(
+            title=f"{transaction_type} Kamas Transaction Details",
+            timeout=None
+        )
         self.transaction_type = transaction_type
+        
+        # Add text inputs to the modal
+        self.add_item(ui.TextInput(
+            label="Kamas Amount",
+            placeholder="Enter amount (e.g. 10M)",
+            required=True,
+            max_length=20
+        ))
+        
+        self.add_item(ui.TextInput(
+            label="Price per Million",
+            placeholder="Enter price (e.g. 5)",
+            required=True,
+            max_length=20
+        ))
+        
+        self.add_item(ui.TextInput(
+            label="Payment Method",
+            placeholder="e.g. PayPal, Bank Transfer",
+            required=True,
+            max_length=100
+        ))
+        
+        self.add_item(ui.TextInput(
+            label="Contact Info",
+            placeholder="Discord tag or contact info",
+            required=True,
+            max_length=100
+        ))
+        
+        self.add_item(ui.TextInput(
+            label="Additional Notes",
+            placeholder="Any important details...",
+            required=False,
+            style=discord.TextStyle.paragraph,
+            max_length=500
+        ))
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            kamas_amount = parse_kamas_amount(self.amount.value)
+            # Get all input values
+            amount = self.children[0].value
+            price_per_million = self.children[1].value
+            payment_method = self.children[2].value
+            contact_info = self.children[3].value
+            additional_info = self.children[4].value
+            
+            # Validate kamas amount
+            kamas_amount = parse_kamas_amount(amount)
             if kamas_amount is None:
                 await interaction.response.send_message(
                     "Invalid kamas amount format. Please use formats like '10M', '500K', or '1000000'.",
