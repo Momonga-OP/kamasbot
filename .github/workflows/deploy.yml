@@ -1,14 +1,22 @@
 name: Deploy Bot
 
 on:
+  # Run on push to main branch
   push:
     branches: [ main ]
+  # Run on pull requests to main branch
   pull_request:
     branches: [ main ]
+  # Schedule to run every 5 hours
+  schedule:
+    - cron: '0 */5 * * *'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9]
 
     steps:
     - uses: actions/checkout@v2
@@ -16,7 +24,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.9'
+        python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies
       run: |
@@ -25,12 +33,12 @@ jobs:
 
     - name: Run tests
       run: |
-        # Add your test commands here
-        echo "Running tests..."
+        python -m pytest
 
     - name: Deploy to production
       run: |
-        # Add your deployment commands here
-        echo "Deploying to production..."
+        python -m pip install pm2
+        pm2 start bot.py --name "kamasbot" --interpreter python3
+        pm2 save
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
