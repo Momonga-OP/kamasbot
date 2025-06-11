@@ -8,9 +8,10 @@ import aiohttp
 from io import BytesIO
 import logging
 import asyncio
+from dotenv import load_dotenv
 
 from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS
-from utils.utils import parse_kamas_amount, format_kamas_amount
+from utils.utils import parse_kamas_amount, format_kamas_amount, store_verification_data
 
 logger = logging.getLogger(__name__)
 
@@ -20,46 +21,54 @@ class KamasModal(ui.Modal):
     def __init__(self, transaction_type):
         super().__init__(
             title=f"{transaction_type} Kamas Transaction Details",
-            timeout=None
+            timeout=None,
+            custom_id=f"kamas_modal_{transaction_type}_{uuid.uuid4()}",
         )
         self.transaction_type = transaction_type
         
-        # Add text inputs to the modal
-        self.add_item(ui.TextInput(
+        # Define fields with proper names
+        self.kamas_amount = ui.TextInput(
             label="Kamas Amount",
             placeholder="Enter amount (e.g. 10M)",
             required=True,
             max_length=20
-        ))
+        )
         
-        self.add_item(ui.TextInput(
+        self.price_per_million = ui.TextInput(
             label="Price per Million",
             placeholder="Enter price (e.g. 5)",
             required=True,
             max_length=20
-        ))
+        )
         
-        self.add_item(ui.TextInput(
+        self.payment_method = ui.TextInput(
             label="Payment Method",
             placeholder="e.g. PayPal, Bank Transfer",
             required=True,
             max_length=100
-        ))
+        )
         
-        self.add_item(ui.TextInput(
+        self.contact_info = ui.TextInput(
             label="Contact Info",
             placeholder="Discord tag or contact info",
             required=True,
             max_length=100
-        ))
+        )
         
-        self.add_item(ui.TextInput(
+        self.notes = ui.TextInput(
             label="Additional Notes",
             placeholder="Any important details...",
             required=False,
             style=discord.TextStyle.paragraph,
             max_length=500
-        ))
+        )
+        
+        # Add fields to modal
+        self.add_item(self.kamas_amount)
+        self.add_item(self.price_per_million)
+        self.add_item(self.payment_method)
+        self.add_item(self.contact_info)
+        self.add_item(self.notes)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
