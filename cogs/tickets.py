@@ -7,6 +7,7 @@ import uuid
 import aiohttp
 from io import BytesIO
 import logging
+import asyncio
 
 from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS
 from utils.utils import parse_kamas_amount, format_kamas_amount
