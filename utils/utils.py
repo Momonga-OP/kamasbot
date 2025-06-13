@@ -1,35 +1,63 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import aiohttp
 from io import BytesIO
 import re
 from discord import utils
+from utils.constants import KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID, REPUTATION_CHANNEL_ID, BADGE_THRESHOLDS, BADGE_COLORS, ARCHIVE_CHANNEL_ID
+import discord
+from functools import wraps
+import time
+import json
 
 logger = logging.getLogger(__name__)
 
+# Rate limiting decorator
+def rate_limited(window_seconds=60, max_requests=5):
+    def decorator(func):
+        calls = []
+        
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            now = time.time()
+            calls[:] = [call for call in calls if call > now - window_seconds]
+            
+            if len(calls) >= max_requests:
+                raise commands.CommandError(
+                    f"Too many requests. Please wait {window_seconds} seconds."
+                )
+                
+            calls.append(now)
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# Enhanced input validation
+def validate_kamas_amount(amount_str):
+    if not isinstance(amount_str, str):
+        return False
+        
+    amount_str = amount_str.replace(" ", "").upper()
+    pattern = r'^\d+(\.\d+)?[MK]?$'
+    return bool(re.fullmatch(pattern, amount_str))
+
 def parse_kamas_amount(amount_str):
     """Parse kamas amount from string format to numeric value."""
+    if not validate_kamas_amount(amount_str):
+        raise ValueError("Invalid kamas amount format")
+        
     amount_str = amount_str.replace(" ", "").upper()
-    if "M" in amount_str:
-        try:
-            num_part = amount_str.replace("M", "")
-            num_part = num_part.replace(",", ".")
-            return float(num_part) * 1000000
-        except ValueError:
-            return None
-    elif "K" in amount_str:
-        try:
-            num_part = amount_str.replace("K", "")
-            num_part = num_part.replace(",", ".")
-            return float(num_part) * 1000
-        except ValueError:
-            return None
-    else:
-        try:
+    try:
+        if "M" in amount_str:
+            return float(amount_str.replace("M", "").replace(",", ".")) * 1000000
+        elif "K" in amount_str:
+            return float(amount_str.replace("K", "").replace(",", ".")) * 1000
+        else:
             return float(amount_str.replace(",", "."))
-        except ValueError:
-            return None
+    except ValueError as e:
+        logger.error(f"Kamas amount parsing failed: {e}")
+        raise
 
 def format_kamas_amount(amount_num):
     """Format numeric kamas amount to string representation."""
@@ -62,14 +90,6 @@ def hash_sensitive_data(data: str) -> str:
     """Hash sensitive data using SHA-256."""
     import hashlib
     return hashlib.sha256(data.encode()).hexdigest()
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(KAMAS_LOGO_URL) as resp:
-                if resp.status == 200:
-                    return await resp.read()
-    except Exception as e:
-        logger.warning(f"Could not fetch Kamas logo: {e}")
-    return None
 
 async def store_verification_data(interaction, user_id, verification_data):
     """Store verification data in the verified sellers channel."""
@@ -156,3 +176,407 @@ async def get_seller_profile(user_id, guild):
     except Exception as e:
         logger.exception(f"Error getting seller profile: {e}")
         return {}
+
+async def update_reputation(interaction: discord.Interaction, seller_id: int, positive: bool):
+    """Update seller reputation using reaction-based tracking in a text file."""
+    try:
+        channel = interaction.client.get_channel(REPUTATION_CHANNEL_ID)
+        if not channel:
+            channel = await interaction.client.fetch_channel(REPUTATION_CHANNEL_ID)
+        
+        # Create/update reputation file
+        filename = f"reputation_{seller_id}.txt"
+        content = f"{datetime.now().isoformat()},{'positive' if positive else 'negative'}"
+        
+        await channel.send(
+            f"Reputation update for <@{seller_id}>",
+            file=discord.File(BytesIO(content.encode()), filename=filename)
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Reputation update failed: {e}")
+        return False
+
+async def calculate_reputation(seller_id: int, guild: discord.Guild):
+    """Calculate reputation score from stored files."""
+    try:
+        channel = guild.get_channel(REPUTATION_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(REPUTATION_CHANNEL_ID)
+        
+        positive = 0
+        negative = 0
+        
+        async for message in channel.history(limit=1000):
+            if message.attachments:
+                for attachment in message.attachments:
+                    if str(seller_id) in attachment.filename:
+                        file_content = await attachment.read()
+                        _, rep_type = file_content.decode().strip().split(',')
+                        if rep_type == 'positive':
+                            positive += 1
+                        else:
+                            negative += 1
+        
+        return {
+            'score': positive - negative,
+            'total': positive + negative,
+            'positive': positive,
+            'negative': negative
+        }
+    except Exception as e:
+        logger.error(f"Reputation calculation failed: {e}")
+        return None
+
+async def update_seller_badges(user_id: int, guild: discord.Guild):
+    """Update seller badges based on transaction count."""
+    try:
+        rep = await calculate_reputation(user_id, guild)
+        if not rep:
+            return
+            
+        member = await guild.fetch_member(user_id)
+        if not member:
+            return
+            
+        # Remove existing badge roles
+        for role in member.roles:
+            if role.name in ["Bronze Seller", "Silver Seller", "Gold Seller"]:
+                await member.remove_roles(role)
+        
+        # Assign new badges
+        if rep['positive'] >= BADGE_THRESHOLDS["GOLD"]:
+            role = await get_or_create_role(guild, "Gold Seller", BADGE_COLORS["GOLD"])
+        elif rep['positive'] >= BADGE_THRESHOLDS["SILVER"]:
+            role = await get_or_create_role(guild, "Silver Seller", BADGE_COLORS["SILVER"])
+        elif rep['positive'] >= BADGE_THRESHOLDS["BRONZE"]:
+            role = await get_or_create_role(guild, "Bronze Seller", BADGE_COLORS["BRONZE"])
+        else:
+            return
+            
+        await member.add_roles(role)
+        return role.name
+        
+    except Exception as e:
+        logger.error(f"Badge update failed: {e}")
+        return None
+
+async def get_or_create_role(guild, name, color):
+    """Get or create a badge role."""
+    role = discord.utils.get(guild.roles, name=name)
+    if not role:
+        role = await guild.create_role(name=name, color=discord.Color(color))
+    return role
+
+async def archive_transaction(message: discord.Message):
+    """Move a transaction to the archive channel."""
+    try:
+        archive_channel = message.guild.get_channel(ARCHIVE_CHANNEL_ID)
+        if not archive_channel:
+            archive_channel = await message.guild.fetch_channel(ARCHIVE_CHANNEL_ID)
+        
+        # Create archive file
+        content = f"Transaction from {message.created_at}\n"
+        content += f"Original URL: {message.jump_url}\n\n"
+        
+        # Add embed data if exists
+        if message.embeds:
+            embed = message.embeds[0]
+            content += f"Title: {embed.title}\n"
+            content += f"Description: {embed.description}\n"
+            for field in embed.fields:
+                content += f"{field.name}: {field.value}\n"
+        
+        # Add attachments if any
+        if message.attachments:
+            content += "\nAttachments:\n"
+            for att in message.attachments:
+                content += f"- {att.filename}: {att.url}\n"
+        
+        # Send to archive
+        filename = f"txn_{message.id}.txt"
+        await archive_channel.send(
+            f"Archived transaction from {message.author.mention}",
+            file=discord.File(BytesIO(content.encode()), filename=filename)
+        )
+        
+        # Delete original if successful
+        await message.delete()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Archive failed: {e}")
+        return False
+
+async def search_archives(guild: discord.Guild, query: str):
+    """Search archived transactions."""
+    try:
+        channel = guild.get_channel(ARCHIVE_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(ARCHIVE_CHANNEL_ID)
+        
+        results = []
+        async for message in channel.history(limit=1000):
+            if message.attachments:
+                for att in message.attachments:
+                    if query.lower() in att.filename.lower():
+                        results.append({
+                            "url": message.jump_url,
+                            "date": message.created_at,
+                            "filename": att.filename
+                        })
+        return results
+    except Exception as e:
+        logger.error(f"Archive search failed: {e}")
+        return []
+
+async def collect_market_data(guild: discord.Guild):
+    """Collect trading data from archive channel."""
+    try:
+        from config import ARCHIVE_CHANNEL_ID
+        channel = guild.get_channel(ARCHIVE_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(ARCHIVE_CHANNEL_ID)
+        
+        data = {
+            'total_transactions': 0,
+            'total_kamas': 0,
+            'payment_methods': {},
+            'daily_volume': {},
+            'seller_stats': {},
+            'price_ranges': {},  # New: Track kamas price ranges
+            'transaction_times': [],  # New: Track time of day
+            'new_sellers': set()  # New: Track new sellers
+        }
+        
+        # Get seller list from previous week for new seller detection
+        prev_sellers = set()
+        async for old_msg in channel.history(after=datetime.now()-timedelta(days=14), limit=500):
+            if old_msg.attachments and old_msg.created_at < datetime.now()-timedelta(days=7):
+                for att in old_msg.attachments:
+                    if 'txn_' in att.filename:
+                        prev_sellers.add(old_msg.author.id)
+        
+        async for message in channel.history(limit=1000):
+            if message.attachments:
+                data['total_transactions'] += 1
+                data['transaction_times'].append(message.created_at.hour)
+                
+                # Parse transaction details from filename
+                for att in message.attachments:
+                    if 'txn_' in att.filename:
+                        parts = att.filename.split('_')
+                        if len(parts) >= 4:  # txn_ID_KAMAS_PAYMENTMETHOD
+                            try:
+                                kamas = int(parts[2])
+                                method = parts[3].split('.')[0]
+                                date = message.created_at.date()
+                                
+                                # Track price ranges
+                                price_range = f"{(kamas // 1000) * 1000}-{(kamas // 1000 + 1) * 1000}"
+                                data['price_ranges'][price_range] = data['price_ranges'].get(price_range, 0) + 1
+                                
+                                # Track new sellers
+                                if message.author.id not in prev_sellers:
+                                    data['new_sellers'].add(message.author.id)
+                                
+                                # Existing tracking
+                                data['total_kamas'] += kamas
+                                data['payment_methods'][method] = data['payment_methods'].get(method, 0) + 1
+                                data['daily_volume'][str(date)] = data['daily_volume'].get(str(date), 0) + kamas
+                                
+                                seller = message.author.id
+                                data['seller_stats'][seller] = data['seller_stats'].get(seller, {'count': 0, 'volume': 0})
+                                data['seller_stats'][seller]['count'] += 1
+                                data['seller_stats'][seller]['volume'] += kamas
+                                
+                            except (ValueError, IndexError):
+                                continue
+        
+        # Calculate additional metrics
+        data['avg_kamas_per_txn'] = data['total_kamas'] / data['total_transactions'] if data['total_transactions'] else 0
+        data['busiest_hour'] = max(set(data['transaction_times']), key=data['transaction_times'].count) if data['transaction_times'] else None
+        data['new_sellers_count'] = len(data['new_sellers'])
+        
+        return data
+    except Exception as e:
+        logger.error(f"Market data collection failed: {e}")
+        return None
+
+async def generate_market_report(guild: discord.Guild):
+    """Generate weekly market report."""
+    try:
+        from config import STATS_CHANNEL_ID
+        data = await collect_market_data(guild)
+        if not data:
+            return False
+            
+        # Generate report embed
+        embed = discord.Embed(
+            title="Weekly Market Report",
+            color=discord.Color.green(),
+            timestamp=datetime.now()
+        )
+        
+        # Main stats
+        embed.add_field(
+            name="Transaction Volume",
+            value=f"{data['total_transactions']} transactions\n{data['total_kamas']:,} kamas total\nAvg: {data['avg_kamas_per_txn']:,.0f} kamas/txn",
+            inline=False
+        )
+        
+        # New sellers
+        embed.add_field(
+            name="New Sellers",
+            value=f"{data['new_sellers_count']} new sellers this week",
+            inline=True
+        )
+        
+        # Busiest hour
+        if data['busiest_hour']:
+            embed.add_field(
+                name="Peak Hours",
+                value=f"{data['busiest_hour']}:00-{data['busiest_hour']+1}:00",
+                inline=True
+            )
+        
+        # Top payment methods
+        top_methods = sorted(
+            data['payment_methods'].items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+        embed.add_field(
+            name="Top Payment Methods",
+            value="\n".join(f"{m}: {c}" for m, c in top_methods),
+            inline=True
+        )
+        
+        # Price ranges
+        top_ranges = sorted(
+            data['price_ranges'].items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+        embed.add_field(
+            name="Popular Price Ranges",
+            value="\n".join(f"{r}: {c}" for r, c in top_ranges),
+            inline=True
+        )
+        
+        # Top sellers
+        top_sellers = sorted(
+            [(k, v['volume']) for k, v in data['seller_stats'].items()],
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+        embed.add_field(
+            name="Top Sellers by Volume",
+            value="\n".join(f"<@{s[0]}>: {s[1]:,} kamas" for s in top_sellers),
+            inline=True
+        )
+        
+        # Send to stats channel
+        channel = guild.get_channel(STATS_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(STATS_CHANNEL_ID)
+            
+        await channel.send(embed=embed)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Market report generation failed: {e}")
+        return False
+
+async def create_escrow(buyer: discord.Member, seller: discord.Member, middleman: discord.Member, amount: int):
+    """Create an escrow transaction file."""
+    try:
+        from config import ESCROW_CHANNEL_ID, ESCROW_FEE_PERCENT
+        fee = int(amount * (ESCROW_FEE_PERCENT / 100))
+        
+        escrow_data = {
+            "buyer": buyer.id,
+            "seller": seller.id,
+            "middleman": middleman.id,
+            "amount": amount,
+            "fee": fee,
+            "created_at": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        # Store in escrow channel
+        channel = buyer.guild.get_channel(ESCROW_CHANNEL_ID)
+        if not channel:
+            channel = await buyer.guild.fetch_channel(ESCROW_CHANNEL_ID)
+            
+        filename = f"escrow_{buyer.id}_{seller.id}_{int(datetime.now().timestamp())}.json"
+        await channel.send(
+            f"New escrow created for {amount} kamas",
+            file=discord.File(BytesIO(json.dumps(escrow_data).encode()), filename=filename)
+        )
+        
+        return True
+    except Exception as e:
+        logger.error(f"Escrow creation failed: {e}")
+        return False
+
+async def get_escrow_transactions(guild: discord.Guild):
+    """Retrieve all active escrow transactions."""
+    try:
+        from config import ESCROW_CHANNEL_ID
+        channel = guild.get_channel(ESCROW_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(ESCROW_CHANNEL_ID)
+            
+        escrows = []
+        async for message in channel.history(limit=200):
+            if message.attachments:
+                for att in message.attachments:
+                    if att.filename.startswith('escrow_'):
+                        content = await att.read()
+                        escrows.append(json.loads(content.decode()))
+        return escrows
+    except Exception as e:
+        logger.error(f"Escrow retrieval failed: {e}")
+        return []
+
+async def load_translations(guild: discord.Guild):
+    """Load all translations from the translations channel."""
+    try:
+        from config import TRANSLATIONS_CHANNEL_ID
+        channel = guild.get_channel(TRANSLATIONS_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(TRANSLATIONS_CHANNEL_ID)
+        
+        translations = {}
+        async for message in channel.history(limit=200):
+            if message.attachments and message.attachments[0].filename.endswith('.json'):
+                lang = message.attachments[0].filename.split('.')[0]
+                content = await message.attachments[0].read()
+                translations[lang] = json.loads(content.decode())
+        
+        return translations
+    except Exception as e:
+        logger.error(f"Translation loading failed: {e}")
+        return {}
+
+async def get_user_language(user_id: int, guild: discord.Guild):
+    """Get a user's preferred language."""
+    # Default to English
+    return 'en'
+
+async def translate(key: str, guild: discord.Guild, user_id: int = None, **kwargs):
+    """Get a translated string."""
+    try:
+        lang = await get_user_language(user_id, guild) if user_id else 'en'
+        translations = await load_translations(guild)
+        
+        # Fallback chain: user lang -> English -> key itself
+        for try_lang in [lang, 'en']:
+            if try_lang in translations and key in translations[try_lang]:
+                return translations[try_lang][key].format(**kwargs)
+        
+        return key
+    except Exception as e:
+        logger.error(f"Translation failed for key {key}: {e}")
+        return key

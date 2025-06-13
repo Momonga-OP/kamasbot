@@ -56,6 +56,17 @@ class VerificationModal(ui.Modal, title="Seller Verification Application"):
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            if not all([
+                self.social_media_handle.value,
+                self.social_media_type.value,
+                len(self.additional_info.value) < 500
+            ]):
+                await interaction.response.send_message(
+                    "Please fill all required fields and keep additional info under 500 characters.",
+                    ephemeral=True
+                )
+                return
+            
             platform = self.social_media_type.value.lower().strip()
             valid_platforms = ['twitter', 'instagram', 'facebook']
             

@@ -7,58 +7,89 @@ import uuid
 import aiohttp
 from io import BytesIO
 import logging
-
-from utils.constants import TICKET_CHANNEL_ID
-from utils.utils import *
+import asyncio
+from dotenv import load_dotenv
+from datetime import datetime
+import asyncio
+from utils.utils import archive_transaction, search_archives, generate_market_report
+from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS, ARCHIVE_AFTER_DAYS
+from utils.utils import parse_kamas_amount, format_kamas_amount, store_verification_data, validate_kamas_amount
 
 logger = logging.getLogger(__name__)
 
-class KamasModal(ui.Modal, title="Kamas Transaction Details"):
+class KamasModal(ui.Modal):
     """Modal form for kamas transactions."""
     
-    amount = ui.TextInput(
-        label="Kamas Amount",
-        placeholder="Enter amount (e.g. 10M)",
-        required=True,
-        max_length=20
-    )
-    
-    price = ui.TextInput(
-        label="Price per Million",
-        placeholder="Enter price (e.g. 5)",
-        required=True,
-        max_length=20
-    )
-    
-    payment_method = ui.TextInput(
-        label="Payment Method",
-        placeholder="e.g. PayPal, Bank Transfer",
-        required=True,
-        max_length=100
-    )
-    
-    contact = ui.TextInput(
-        label="Contact Info",
-        placeholder="Discord tag or contact info",
-        required=True,
-        max_length=100
-    )
-    
-    notes = ui.TextInput(
-        label="Additional Notes",
-        placeholder="Any important details...",
-        required=False,
-        style=discord.TextStyle.paragraph,
-        max_length=500
-    )
-    
     def __init__(self, transaction_type):
-        super().__init__()
+        super().__init__(
+            title=f"{transaction_type} Kamas Transaction Details",
+            timeout=None,
+            custom_id=f"kamas_modal_{transaction_type}_{uuid.uuid4()}",
+        )
         self.transaction_type = transaction_type
+        
+        # Define fields with proper names
+        self.kamas_amount = ui.TextInput(
+            label="Kamas Amount",
+            placeholder="Enter amount (e.g. 10M)",
+            required=True,
+            max_length=20
+        )
+        
+        self.price_per_million = ui.TextInput(
+            label="Price per Million",
+            placeholder="Enter price (e.g. 5)",
+            required=True,
+            max_length=20
+        )
+        
+        self.payment_method = ui.TextInput(
+            label="Payment Method",
+            placeholder="e.g. PayPal, Bank Transfer",
+            required=True,
+            max_length=100
+        )
+        
+        self.contact_info = ui.TextInput(
+            label="Contact Info",
+            placeholder="Discord tag or contact info",
+            required=True,
+            max_length=100
+        )
+        
+        self.notes = ui.TextInput(
+            label="Additional Notes",
+            placeholder="Any important details...",
+            required=False,
+            style=discord.TextStyle.paragraph,
+            max_length=500
+        )
+        
+        # Add fields to modal
+        self.add_item(self.kamas_amount)
+        self.add_item(self.price_per_million)
+        self.add_item(self.payment_method)
+        self.add_item(self.contact_info)
+        self.add_item(self.notes)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            kamas_amount = parse_kamas_amount(self.amount.value)
+            if not validate_kamas_amount(self.kamas_amount.value):
+                await interaction.response.send_message(
+                    "Invalid kamas amount format. Please use format like '10M' or '500K'.",
+                    ephemeral=True
+                )
+                return
+            
+            # Get all input values
+            amount = self.children[0].value
+            price_per_million = self.children[1].value
+            payment_method = self.children[2].value
+            contact_info = self.children[3].value
+            additional_info = self.children[4].value
+            
+            # Validate kamas amount
+            kamas_amount = parse_kamas_amount(amount)
             if kamas_amount is None:
                 await interaction.response.send_message(
                     "Invalid kamas amount format. Please use formats like '10M', '500K', or '1000000'.",
@@ -76,7 +107,7 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
                 }
                 
             try:
-                price_per_m = float(self.price.value.replace(',', '.'))
+                price_per_m = float(self.price_per_million.value.replace(',', '.'))
             except ValueError:
                 await interaction.response.send_message(
                     "Invalid price format. Please enter a numeric value.",
@@ -90,7 +121,7 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
                 "kamas_amount_str": format_kamas_amount(kamas_amount),
                 "price_per_m": price_per_m,
                 "payment_method": self.payment_method.value,
-                "contact_info": self.contact.value,
+                "contact_info": self.contact_info.value,
                 "additional_info": self.notes.value,
                 "user_id": interaction.user.id,
                 "payment_split": payment_split
@@ -118,9 +149,9 @@ class KamasModal(ui.Modal, title="Kamas Transaction Details"):
             )
             
         except Exception as e:
-            logger.exception(f"Error processing kamas form: {e}")
+            logger.error(f"Modal submission error: {e}")
             await interaction.response.send_message(
-                "There was an error processing your listing. Please try again later.",
+                "An error occurred. Please try again later.",
                 ephemeral=True
             )
 
@@ -293,15 +324,56 @@ class TicketsCog(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+        self.bot.add_listener(self.on_reaction_add, 'on_reaction_add')
+        self.bot.loop.create_task(self.check_old_tickets())  # Start auto-archive
+        self.bot.loop.create_task(self.weekly_market_report())
+        self.bot.loop.create_task(self.check_escrow_timeouts())  # Add this line
         self.bot.loop.create_task(self.restore_active_views())
     
+    async def on_reaction_add(self, reaction, user):
+        """Handle reputation updates from reactions."""
+        try:
+            if user.bot:
+                return
+                
+            if reaction.message.channel.id != TICKET_CHANNEL_ID:
+                return
+                
+            if str(reaction.emoji) == '👍':
+                seller_id = reaction.message.embeds[0].fields[0].value.split(':')[1].strip()
+                await update_reputation(reaction.message, int(seller_id), True)
+            elif str(reaction.emoji) == '👎':
+                seller_id = reaction.message.embeds[0].fields[0].value.split(':')[1].strip()
+                await update_reputation(reaction.message, int(seller_id), False)
+        except Exception as e:
+            logger.error(f"Reaction handling failed: {e}")
+
+    async def show_seller_reputation(self, interaction: discord.Interaction, seller_id: int):
+        """Display seller reputation in an embed."""
+        rep = await calculate_reputation(seller_id, interaction.guild)
+        if not rep:
+            await interaction.response.send_message("Could not calculate reputation.", ephemeral=True)
+            return
+            
+        embed = discord.Embed(
+            title=f"Seller Reputation",
+            description=f"<@{seller_id}>'s trading reputation",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Score", value=str(rep['score']))
+        embed.add_field(name="Total Transactions", value=str(rep['total']))
+        embed.add_field(name="Positive", value=str(rep['positive']))
+        embed.add_field(name="Negative", value=str(rep['negative']))
+        
+        await interaction.response.send_message(embed=embed)
+
     async def restore_active_views(self):
         await self.bot.wait_until_ready()
         try:
             ticket_channel = self.bot.get_channel(TICKET_CHANNEL_ID)
             if not ticket_channel:
                 ticket_channel = await self.bot.fetch_channel(TICKET_CHANNEL_ID)
-                
+            
             listing_files = [f for f in os.listdir() if f.startswith("listing_")]
             
             for file in listing_files:
@@ -367,3 +439,176 @@ class TicketsCog(commands.Cog):
             
         except Exception as e:
             logger.exception(f"Error in restore_active_views: {e}")
+
+    async def check_old_tickets(self):
+        """Auto-archive tickets older than ARCHIVE_AFTER_DAYS."""
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                channel = self.bot.get_channel(TICKET_CHANNEL_ID)
+                if not channel:
+                    channel = await self.bot.fetch_channel(TICKET_CHANNEL_ID)
+                
+                async for message in channel.history(limit=1000):
+                    if (datetime.now() - message.created_at).days > ARCHIVE_AFTER_DAYS:
+                        await archive_transaction(message)
+                        
+                # Check daily
+                await asyncio.sleep(86400)  
+            except Exception as e:
+                logger.error(f"Ticket archive check failed: {e}")
+                await asyncio.sleep(3600)
+
+    async def check_escrow_timeouts(self):
+        """Check for expired escrow transactions."""
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                from config import ESCROW_TIMEOUT_HOURS
+                from utils.utils import get_escrow_transactions
+                
+                escrows = await get_escrow_transactions(self.bot.guilds[0])
+                for escrow in escrows:
+                    if escrow['status'] == 'pending':
+                        created_at = datetime.fromisoformat(escrow['created_at'])
+                        if (datetime.now() - created_at).total_seconds() > ESCROW_TIMEOUT_HOURS * 3600:
+                            # Mark as expired in the file
+                            await self.expire_escrow(escrow)
+            
+                # Check hourly
+                await asyncio.sleep(3600)
+            except Exception as e:
+                logger.error(f"Escrow timeout check failed: {e}")
+                await asyncio.sleep(3600)
+
+    async def expire_escrow(self, escrow_data):
+        """Mark an escrow as expired."""
+        from config import ESCROW_CHANNEL_ID
+        try:
+            escrow_data['status'] = 'expired'
+            channel = self.bot.get_channel(ESCROW_CHANNEL_ID)
+            if not channel:
+                channel = await self.bot.fetch_channel(ESCROW_CHANNEL_ID)
+        
+            # Find and update the original message
+            async for message in channel.history(limit=200):
+                if message.attachments:
+                    for att in message.attachments:
+                        if f"escrow_{escrow_data['buyer']}_{escrow_data['seller']}" in att.filename:
+                            await message.edit(
+                                content=f"ESCROW EXPIRED - {message.content}",
+                                attachments=[discord.File(
+                                    BytesIO(json.dumps(escrow_data).encode()),
+                                    filename=att.filename
+                                )]
+                            )
+                            return True
+            return False
+        except Exception as e:
+            logger.error(f"Escrow expiration failed: {e}")
+            return False
+
+    @app_commands.command(name="generate_report", description="Generate a market report manually")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def generate_report(self, interaction: discord.Interaction):
+        """Manually generate a market report."""
+        await interaction.response.defer()
+        try:
+            success = await generate_market_report(interaction.guild)
+            if success:
+                await interaction.followup.send("Market report generated successfully!", ephemeral=True)
+            else:
+                await interaction.followup.send("Failed to generate report. Check logs.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Manual report failed: {e}")
+            await interaction.followup.send("An error occurred. Check logs.", ephemeral=True)
+
+    @app_commands.command(name="create_escrow", description="Create an escrow for a high-value trade")
+    async def create_escrow(
+        self, 
+        interaction: discord.Interaction,
+        seller: discord.Member,
+        middleman: discord.Member,
+        amount: int
+    ):
+        """Create an escrow transaction."""
+        from config import MIN_ESCROW_AMOUNT
+        
+        if amount < MIN_ESCROW_AMOUNT:
+            return await interaction.response.send_message(
+                f"Escrow only available for trades of {MIN_ESCROW_AMOUNT:,}+ kamas",
+                ephemeral=True
+            )
+            
+        await interaction.response.defer()
+        success = await create_escrow(interaction.user, seller, middleman, amount)
+        
+        if success:
+            await interaction.followup.send(
+                f"Escrow created successfully! {middleman.mention} will mediate this trade.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "Failed to create escrow. Please try again.",
+                ephemeral=True
+            )
+
+    @app_commands.command(name="complete_escrow", description="Mark an escrow as completed")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def complete_escrow(self, interaction: discord.Interaction, escrow_id: str):
+        """Mark an escrow as completed."""
+        await interaction.response.defer()
+        # Implementation would update escrow file status
+        await interaction.followup.send("Escrow marked as completed", ephemeral=True)
+
+    @app_commands.command(name="cancel_escrow", description="Cancel an escrow transaction")
+    async def cancel_escrow(self, interaction: discord.Interaction, escrow_id: str):
+        """Cancel an escrow transaction."""
+        await interaction.response.defer()
+        # Implementation would update escrow file status
+        await interaction.followup.send("Escrow cancelled", ephemeral=True)
+
+    @app_commands.command(name="dispute_escrow", description="File a dispute for an escrow transaction")
+    async def dispute_escrow(self, interaction: discord.Interaction, escrow_id: str, reason: str):
+        """File an escrow dispute."""
+        from config import ESCROW_CHANNEL_ID
+        await interaction.response.defer()
+        
+        try:
+            channel = interaction.guild.get_channel(ESCROW_CHANNEL_ID)
+            if not channel:
+                channel = await interaction.guild.fetch_channel(ESCROW_CHANNEL_ID)
+            
+            # Find and update escrow file
+            async for message in channel.history(limit=200):
+                if message.attachments:
+                    for att in message.attachments:
+                        if escrow_id in att.filename:
+                            content = await att.read()
+                            escrow = json.loads(content.decode())
+                            escrow['dispute'] = {
+                                "filed_by": interaction.user.id,
+                                "reason": reason,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            escrow['status'] = 'disputed'
+                            
+                            await message.edit(
+                                content=f"DISPUTE FILED - {message.content}",
+                                attachments=[discord.File(
+                                    BytesIO(json.dumps(escrow).encode()),
+                                    filename=att.filename
+                                )]
+                            )
+                            
+                            await interaction.followup.send(
+                                "Dispute filed successfully. An admin will review your case.",
+                                ephemeral=True
+                            )
+                            return
+            
+            await interaction.followup.send("Escrow not found", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Escrow dispute failed: {e}")
+            await interaction.followup.send("Failed to file dispute", ephemeral=True)

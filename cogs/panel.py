@@ -6,29 +6,53 @@ import os
 import logging
 
 from utils.constants import PANEL_CHANNEL_ID, KAMAS_LOGO_URL
-from utils.utils import fetch_kamas_logo
+from utils.utils import fetch_kamas_logo, rate_limited, validate_kamas_amount
 from cogs.tickets import KamasModal
 from cogs.verification import VerificationModal
 
 logger = logging.getLogger(__name__)
 
 class KamasView(ui.View):
-    """View containing the Buy, Sell, and Verification buttons."""
+    """View containing the Buy, Sell, and Verification buttons with rate limiting."""
     
     def __init__(self):
         super().__init__(timeout=None)
     
+    @rate_limited()
     @discord.ui.button(label="BUY KAMAS", style=discord.ButtonStyle.primary, custom_id="buy_kamas", emoji="💰")
     async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(KamasModal("BUY"))
+        try:
+            await interaction.response.send_modal(KamasModal("BUY"))
+        except Exception as e:
+            logger.error(f"Buy button error: {e}")
+            await interaction.response.send_message(
+                "An error occurred. Please try again later.", 
+                ephemeral=True
+            )
     
+    @rate_limited()
     @discord.ui.button(label="SELL KAMAS", style=discord.ButtonStyle.success, custom_id="sell_kamas", emoji="💎")
     async def sell_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(KamasModal("SELL"))
+        try:
+            await interaction.response.send_modal(KamasModal("SELL"))
+        except Exception as e:
+            logger.error(f"Sell button error: {e}")
+            await interaction.response.send_message(
+                "An error occurred. Please try again later.", 
+                ephemeral=True
+            )
     
+    @rate_limited()
     @discord.ui.button(label="BECOME VERIFIED SELLER", style=discord.ButtonStyle.secondary, custom_id="verify_seller", emoji="🏆")
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(VerificationModal())
+        try:
+            await interaction.response.send_modal(VerificationModal())
+        except Exception as e:
+            logger.error(f"Verify button error: {e}")
+            await interaction.response.send_message(
+                "An error occurred. Please try again later.", 
+                ephemeral=True
+            )
 
 class CurrencySelect(ui.Select):
     """Dropdown menu for selecting currency."""
@@ -55,24 +79,13 @@ class PanelCog(commands.Cog):
             if not panel_channel:
                 panel_channel = await self.bot.fetch_channel(PANEL_CHANNEL_ID)
             
-            panel_message_id = None
-            panel_file_path = "kamas_panel_id.txt"
-            if os.path.exists(panel_file_path):
-                with open(panel_file_path, "r") as f:
+            # Clean up old panels
+            async for message in panel_channel.history(limit=100):
+                if message.author == self.bot.user:
                     try:
-                        panel_message_id = int(f.read().strip())
-                    except (ValueError, IOError):
-                        logger.warning("Could not read panel message ID from file")
-            
-            existing_message = None
-            if panel_message_id:
-                try:
-                    existing_message = await panel_channel.fetch_message(panel_message_id)
-                    logger.info(f"Found existing kamas panel message: {panel_message_id}")
-                except discord.NotFound:
-                    logger.info("Stored kamas panel message not found, creating new one")
-                except Exception as e:
-                    logger.exception(f"Error fetching kamas panel message: {e}")
+                        await message.delete()
+                    except:
+                        continue
             
             kamas_logo = await fetch_kamas_logo()
             
@@ -102,6 +115,12 @@ class PanelCog(commands.Cog):
             embed.add_field(name="👥 Trusted Intermediary Service", value="\u200b", inline=False)
             
             embed.add_field(
+                name="Seller Badges", 
+                value="» 🥉 Bronze (10+ trades)\n» 🥈 Silver (30+)\n» 🥇 Gold (50+)",
+                inline=False
+            )
+            
+            embed.add_field(
                 name="How It Works",
                 value=(
                     "1. Click one of the buttons below and fill out the form\n"
@@ -116,18 +135,10 @@ class PanelCog(commands.Cog):
             
             embed.set_footer(text="AFL Wall Street - Making transactions secure since Today we are just Testing this Idea")
             
-            view = KamasView()
+            # Post new panel
+            self.panel_message = await panel_channel.send(embed=embed, view=KamasView())
+            logger.info(f"Created new kamas panel: {self.panel_message.id}")
             
-            if existing_message:
-                await existing_message.edit(embed=embed, view=view)
-                self.panel_message = existing_message
-                logger.info(f"Updated existing kamas panel message: {existing_message.id}")
-            else:
-                self.panel_message = await panel_channel.send(embed=embed, view=view)
-                with open(panel_file_path, "w") as f:
-                    f.write(str(self.panel_message.id))
-                logger.info(f"Created new kamas panel message: {self.panel_message.id}")
-                
         except Exception as e:
             logger.exception(f"Error setting up kamas panel: {e}")
     

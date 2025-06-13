@@ -1,14 +1,15 @@
-# Channel IDs
-PANEL_CHANNEL_ID = 1258426636496404510  # Main panel channel
-TICKET_CHANNEL_ID = 1358383554798817410  # Tickets channel
-VERIFIED_DATA_CHANNEL_ID = 1248345019333611561  # Verified data channel
-SERVER_ID = 1217700740949348443  # Discord server ID
+"""Constants that reference configuration values."""
+from config import (
+    PANEL_CHANNEL_ID,
+    TICKET_CHANNEL_ID,
+    VERIFIED_DATA_CHANNEL_ID,
+    REPUTATION_CHANNEL_ID,
+    SERVER_ID,
+    KAMAS_LOGO_URL,
+    CURRENCY_SYMBOLS,
+    BADGE_THRESHOLDS,
+    BADGE_COLORS,
+    ARCHIVE_AFTER_DAYS
+)
 
-# Kamas logo URL
-KAMAS_LOGO_URL = "https://static.wikia.nocookie.net/dofus/images/1/1e/Kama.png"
-
-# Currency symbols
-CURRENCY_SYMBOLS = {
-    "EUR": "€",
-    "USD": "$"
-}
+# No need for separate constants - all config is in config.py
