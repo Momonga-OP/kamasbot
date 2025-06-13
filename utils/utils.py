@@ -669,3 +669,32 @@ async def assign_middleman_badge(member: discord.Member, guild: discord.Guild):
             return True
     
     return False
+
+async def set_user_lang(interaction: discord.Interaction, lang_code: str):
+    """
+    Sets the user's language preference
+    
+    Args:
+        interaction: Discord interaction object
+        lang_code: Language code (e.g. 'en', 'fr', 'es')
+    """
+    # Implementation would depend on how you store user preferences
+    # This is a basic example using a JSON file
+    try:
+        with open('user_langs.json', 'r+') as f:
+            user_langs = json.load(f)
+            user_langs[str(interaction.user.id)] = lang_code
+            f.seek(0)
+            json.dump(user_langs, f)
+            f.truncate()
+        
+        await interaction.response.send_message(
+            f"Language set to {lang_code}", 
+            ephemeral=True
+        )
+    except Exception as e:
+        logger.error(f"Error setting language: {e}")
+        await interaction.response.send_message(
+            "Failed to set language", 
+            ephemeral=True
+        )
