@@ -14,6 +14,7 @@ REMINDERS_CHANNEL_ID = 1383215218455207990  # Channel for reminders
 import os
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')  # From GitHub Actions secrets
 SERVER_ID = 1217700740949348443  # Your server ID
+KAMAS_LOGO_URL = ""  # Empty string since logo not needed
 
 if not DISCORD_TOKEN and __name__ != "__main__":
     raise ValueError("Discord token not found in environment variables")
