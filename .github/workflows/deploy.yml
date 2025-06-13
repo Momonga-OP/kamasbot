@@ -1,9 +1,8 @@
-name: Discord Bot Deployment
+name: Deploy KamasBot
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
     branches:
       - main
@@ -16,14 +15,13 @@ jobs:
 
     steps:
       # Step 1: Checkout the repository
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       # Step 2: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       # Step 3: Install dependencies
       - name: Install dependencies
@@ -31,12 +29,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Step 4: Set up Python path
-      - name: Set up Python path
-        run: |
-          echo "PYTHONPATH=${{ github.workspace }}" >> $GITHUB_ENV
-
-      # Step 5: Run the bot
-      - name: Run the bot
-        run: |
-          python bot.py
+      # Step 4: Run the bot
+      - name: Run bot
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        run: python bot.py

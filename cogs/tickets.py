@@ -7,10 +7,9 @@ import uuid
 import aiohttp
 from io import BytesIO
 import logging
+import json
 import asyncio
 from dotenv import load_dotenv
-from datetime import datetime
-import asyncio
 from utils.utils import archive_transaction, search_archives, generate_market_report
 from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS, ARCHIVE_AFTER_DAYS
 from utils.utils import parse_kamas_amount, format_kamas_amount, store_verification_data, validate_kamas_amount
@@ -107,7 +106,7 @@ class KamasModal(ui.Modal):
                 }
                 
             try:
-                price_per_m = float(self.price_per_million.value.replace(',', '.'))
+                price_per_m = float(self.price.value.replace(',', '.'))
             except ValueError:
                 await interaction.response.send_message(
                     "Invalid price format. Please enter a numeric value.",

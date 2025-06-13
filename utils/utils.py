@@ -1,15 +1,18 @@
 import logging
-from datetime import datetime, timedelta
-import os
 import aiohttp
-from io import BytesIO
+import os
 import re
-from discord import utils
-from utils.constants import KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID, REPUTATION_CHANNEL_ID, BADGE_THRESHOLDS, BADGE_COLORS, ARCHIVE_CHANNEL_ID
-import discord
-from functools import wraps
-import time
 import json
+import time
+from io import BytesIO
+from datetime import datetime
+from discord import utils
+
+from config import (
+    KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID,
+    REPUTATION_CHANNEL_ID, BADGES_CHANNEL_ID,
+    ARCHIVE_CHANNEL_ID, BADGE_COLORS
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,7 @@ def rate_limited(window_seconds=60, max_requests=5):
     def decorator(func):
         calls = []
         
-        @wraps(func)
+        @utils.wraps(func)
         async def wrapper(*args, **kwargs):
             now = time.time()
             calls[:] = [call for call in calls if call > now - window_seconds]
@@ -245,11 +248,11 @@ async def update_seller_badges(user_id: int, guild: discord.Guild):
                 await member.remove_roles(role)
         
         # Assign new badges
-        if rep['positive'] >= BADGE_THRESHOLDS["GOLD"]:
+        if rep['positive'] >= 100:
             role = await get_or_create_role(guild, "Gold Seller", BADGE_COLORS["GOLD"])
-        elif rep['positive'] >= BADGE_THRESHOLDS["SILVER"]:
+        elif rep['positive'] >= 50:
             role = await get_or_create_role(guild, "Silver Seller", BADGE_COLORS["SILVER"])
-        elif rep['positive'] >= BADGE_THRESHOLDS["BRONZE"]:
+        elif rep['positive'] >= 10:
             role = await get_or_create_role(guild, "Bronze Seller", BADGE_COLORS["BRONZE"])
         else:
             return

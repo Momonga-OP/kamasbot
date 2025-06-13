@@ -2,10 +2,7 @@
 import discord
 from discord.ext import commands
 import logging
-import sys
 from pathlib import Path
-
-from config import DISCORD_TOKEN, SERVER_ID
 
 # Ensure logs directory exists
 Path("logs").mkdir(exist_ok=True)
@@ -55,4 +52,5 @@ async def on_ready():
     logger.info('Application commands synced')
 
 if __name__ == '__main__':
+    from config import DISCORD_TOKEN, SERVER_ID
     bot.run(DISCORD_TOKEN)

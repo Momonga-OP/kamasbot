@@ -8,8 +8,15 @@ REPUTATION_CHANNEL_ID = 1383214819158786108  # Example ID
 BADGES_CHANNEL_ID = 1383214869926383696       # Example ID
 ARCHIVE_CHANNEL_ID = 1383214911378690210      # Example ID
 STATS_CHANNEL_ID = 1383214960766619789        # Example ID
-SERVER_ID = 1217700740949348443
 REMINDERS_CHANNEL_ID = 1383215218455207990  # Channel for reminders
+
+# Discord Configuration
+import os
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')  # From GitHub Actions secrets
+SERVER_ID = 1217700740949348443  # Your server ID
+
+if not DISCORD_TOKEN and __name__ != "__main__":
+    raise ValueError("Discord token not found in environment variables")
 
 # Security Settings
 RATE_LIMIT_WINDOW = 60  # Seconds
