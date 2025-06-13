@@ -6,6 +6,7 @@ import json
 import time
 from io import BytesIO
 from datetime import datetime
+import discord
 from discord import utils
 
 from config import (
