@@ -558,9 +558,47 @@ class TicketsCog(commands.Cog):
     @app_commands.checks.has_permissions(manage_messages=True)
     async def complete_escrow(self, interaction: discord.Interaction, escrow_id: str):
         """Mark an escrow as completed."""
+        from config import ESCROW_CHANNEL_ID
+        from utils.utils import assign_middleman_badge
         await interaction.response.defer()
-        # Implementation would update escrow file status
-        await interaction.followup.send("Escrow marked as completed", ephemeral=True)
+        
+        try:
+            channel = interaction.guild.get_channel(ESCROW_CHANNEL_ID)
+            if not channel:
+                channel = await interaction.guild.fetch_channel(ESCROW_CHANNEL_ID)
+            
+            # Find and update escrow file
+            async for message in channel.history(limit=200):
+                if message.attachments:
+                    for att in message.attachments:
+                        if escrow_id in att.filename:
+                            content = await att.read()
+                            escrow = json.loads(content.decode())
+                            escrow['status'] = 'completed'
+                            
+                            await message.edit(
+                                content=f"COMPLETED - {message.content}",
+                                attachments=[discord.File(
+                                    BytesIO(json.dumps(escrow).encode()),
+                                    filename=att.filename
+                                )]
+                            )
+                            
+                            # Assign badge if qualified
+                            middleman = interaction.guild.get_member(escrow['middleman_id'])
+                            if middleman:
+                                await assign_middleman_badge(middleman, interaction.guild)
+                            
+                            await interaction.followup.send(
+                                "Escrow marked as completed",
+                                ephemeral=True
+                            )
+                            return
+            
+            await interaction.followup.send("Escrow not found", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Escrow completion failed: {e}")
+            await interaction.followup.send("Failed to complete escrow", ephemeral=True)
 
     @app_commands.command(name="cancel_escrow", description="Cancel an escrow transaction")
     async def cancel_escrow(self, interaction: discord.Interaction, escrow_id: str):
@@ -612,3 +650,93 @@ class TicketsCog(commands.Cog):
         except Exception as e:
             logger.error(f"Escrow dispute failed: {e}")
             await interaction.followup.send("Failed to file dispute", ephemeral=True)
+
+    @app_commands.command(name="middleman_stats", description="View middleman performance statistics")
+    async def middleman_stats(self, interaction: discord.Interaction, middleman: discord.Member):
+        """Display middleman performance metrics."""
+        from utils.utils import get_escrow_transactions
+        from config import MIDDLEMAN_BADGES
+        await interaction.response.defer()
+        
+        escrows = await get_escrow_transactions(interaction.guild)
+        middleman_escrows = [e for e in escrows if e['middleman_id'] == middleman.id]
+        
+        if not middleman_escrows:
+            return await interaction.followup.send(
+                f"No escrow history found for {middleman.display_name}",
+                ephemeral=True
+            )
+            
+        completed = sum(1 for e in middleman_escrows if e['status'] == 'completed')
+        disputed = sum(1 for e in middleman_escrows if 'dispute' in e)
+        success_rate = (completed / len(middleman_escrows)) * 100
+        
+        # Determine badge
+        current_badge = "None"
+        for badge, requirements in sorted(
+            MIDDLEMAN_BADGES.items(), 
+            key=lambda x: x[1]['escrows'], 
+            reverse=True
+        ):
+            if len(middleman_escrows) >= requirements['escrows'] and \
+               success_rate >= requirements['success_rate']:
+                current_badge = badge
+                break
+        
+        embed = discord.Embed(
+            title=f"Middleman Stats: {middleman.display_name}",
+            color=MIDDLEMAN_BADGES.get(current_badge, {}).get('color', 0x000000)
+        )
+        embed.add_field(name="Badge", value=current_badge)
+        embed.add_field(name="Total Escrows", value=str(len(middleman_escrows)))
+        embed.add_field(name="Success Rate", value=f"{success_rate:.1f}%")
+        embed.add_field(name="Dispute Rate", value=f"{(disputed/len(middleman_escrows))*100:.1f}%")
+        
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="middleman_leaderboard", description="Top middlemen by performance")
+    async def middleman_leaderboard(self, interaction: discord.Interaction):
+        """Display middleman leaderboard."""
+        from utils.utils import get_escrow_transactions
+        from config import MIDDLEMAN_BADGES
+        await interaction.response.defer()
+        
+        escrows = await get_escrow_transactions(interaction.guild)
+        middlemen = {}
+        
+        # Collect stats for all middlemen
+        for escrow in escrows:
+            mid = escrow['middleman_id']
+            if mid not in middlemen:
+                middlemen[mid] = {"total": 0, "completed": 0, "disputed": 0}
+            middlemen[mid]["total"] += 1
+            if escrow['status'] == 'completed':
+                middlemen[mid]["completed"] += 1
+            if 'dispute' in escrow:
+                middlemen[mid]["disputed"] += 1
+        
+        # Calculate scores and sort
+        leaderboard = []
+        for mid, stats in middlemen.items():
+            member = interaction.guild.get_member(mid)
+            if member:
+                score = (stats["completed"] / stats["total"]) * 100
+                leaderboard.append((member, score, stats["total"]))
+        
+        leaderboard.sort(key=lambda x: (-x[1], -x[2]))
+        
+        # Build embed
+        embed = discord.Embed(
+            title="Top Middlemen",
+            color=0xFFD700,
+            description="Ranked by success rate and total escrows"
+        )
+        
+        for i, (member, score, total) in enumerate(leaderboard[:10], 1):
+            embed.add_field(
+                name=f"#{i} {member.display_name}",
+                value=f"{score:.1f}% success ({total} escrows)",
+                inline=False
+            )
+        
+        await interaction.followup.send(embed=embed)

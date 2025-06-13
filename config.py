@@ -9,6 +9,7 @@ BADGES_CHANNEL_ID = 1383214869926383696       # Example ID
 ARCHIVE_CHANNEL_ID = 1383214911378690210      # Example ID
 STATS_CHANNEL_ID = 1383214960766619789        # Example ID
 SERVER_ID = 1217700740949348443
+REMINDERS_CHANNEL_ID = 1383215218455207990  # Channel for reminders
 
 # Security Settings
 RATE_LIMIT_WINDOW = 60  # Seconds
@@ -27,6 +28,24 @@ BADGE_COLORS = {
     "SILVER": 0xc0c0c0,
     "GOLD": 0xffd700
 }
+
+# Middleman Badge Settings
+MIDDLEMAN_BADGES = {
+    "Novice": {"escrows": 5, "success_rate": 80, "color": 0x808080},
+    "Trusted": {"escrows": 15, "success_rate": 85, "color": 0x00FF00},
+    "Expert": {"escrows": 30, "success_rate": 90, "color": 0x0000FF},
+    "Elite": {"escrows": 50, "success_rate": 95, "color": 0xFFD700}
+}
+
+# Middleman Verification
+MIDDLEMAN_APPLICATION_CHANNEL_ID = 1383215218455207988  # Channel for applications
+MIN_ESCROWS_FOR_APPLICATION = 3  # Minimum escrows handled to apply
+MIN_SUCCESS_RATE_FOR_APPLICATION = 85.0  # Minimum success percentage
+VERIFICATION_INTERVIEW_CHANNEL_ID = 1383216546309996695  # Parent channel for interview threads
+
+# Middleman Reminders
+MIDDLEMAN_REMINDERS_CHANNEL_ID = 1383215218455207990  # Channel for automated reminders
+GUIDELINE_REMINDER_FREQ_DAYS = 7  # Send reminders weekly
 
 # Archive Settings
 ARCHIVE_AFTER_DAYS = 7  # Auto-archive transactions after this period

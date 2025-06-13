@@ -6,7 +6,7 @@ import os
 import logging
 
 from utils.constants import PANEL_CHANNEL_ID, KAMAS_LOGO_URL
-from utils.utils import fetch_kamas_logo, rate_limited, validate_kamas_amount
+from utils.utils import fetch_kamas_logo, rate_limited, validate_kamas_amount, set_user_language
 from cogs.tickets import KamasModal
 from cogs.verification import VerificationModal
 

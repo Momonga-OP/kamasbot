@@ -560,10 +560,58 @@ async def load_translations(guild: discord.Guild):
         logger.error(f"Translation loading failed: {e}")
         return {}
 
+async def set_user_language(user_id: int, language: str, guild: discord.Guild):
+    """Store a user's language preference."""
+    try:
+        from config import VERIFIED_DATA_CHANNEL_ID, SUPPORTED_LANGUAGES
+        
+        if language not in SUPPORTED_LANGUAGES:
+            return False
+            
+        channel = guild.get_channel(VERIFIED_DATA_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(VERIFIED_DATA_CHANNEL_ID)
+            
+        # Create/update language file
+        filename = f"lang_{user_id}.txt"
+        content = language
+        
+        # Check if existing file exists
+        async for message in channel.history(limit=200):
+            if message.attachments and message.attachments[0].filename == filename:
+                await message.edit(
+                    attachments=[discord.File(BytesIO(content.encode()), filename=filename)]
+                )
+                return True
+        
+        # Create new if not exists
+        await channel.send(
+            file=discord.File(BytesIO(content.encode()), filename=filename)
+        )
+        return True
+        
+    except Exception as e:
+        logger.error(f"Language setting failed: {e}")
+        return False
+
 async def get_user_language(user_id: int, guild: discord.Guild):
     """Get a user's preferred language."""
-    # Default to English
-    return 'en'
+    try:
+        from config import VERIFIED_DATA_CHANNEL_ID
+        channel = guild.get_channel(VERIFIED_DATA_CHANNEL_ID)
+        if not channel:
+            channel = await guild.fetch_channel(VERIFIED_DATA_CHANNEL_ID)
+            
+        filename = f"lang_{user_id}.txt"
+        async for message in channel.history(limit=200):
+            if message.attachments and message.attachments[0].filename == filename:
+                content = await message.attachments[0].read()
+                return content.decode().strip()
+        
+        return 'en'  # Default to English
+    except Exception as e:
+        logger.error(f"Language retrieval failed: {e}")
+        return 'en'
 
 async def translate(key: str, guild: discord.Guild, user_id: int = None, **kwargs):
     """Get a translated string."""
@@ -580,3 +628,40 @@ async def translate(key: str, guild: discord.Guild, user_id: int = None, **kwarg
     except Exception as e:
         logger.error(f"Translation failed for key {key}: {e}")
         return key
+
+async def assign_middleman_badge(member: discord.Member, guild: discord.Guild):
+    """Assign appropriate middleman badge role."""
+    from config import MIDDLEMAN_BADGES
+    escrows = await get_escrow_transactions(guild)
+    user_escrows = [e for e in escrows if e['middleman'] == member.id]
+    
+    if not user_escrows:
+        return False
+        
+    completed = sum(1 for e in user_escrows if e['status'] == 'completed')
+    success_rate = (completed / len(user_escrows)) * 100
+    
+    # Remove all existing middleman badge roles
+    for role in member.roles:
+        if role.name in MIDDLEMAN_BADGES:
+            await member.remove_roles(role)
+    
+    # Assign new badge if qualified
+    for badge, requirements in sorted(
+        MIDDLEMAN_BADGES.items(), 
+        key=lambda x: x[1]['escrows'], 
+        reverse=True
+    ):
+        if len(user_escrows) >= requirements['escrows'] and \
+           success_rate >= requirements['success_rate']:
+            role = discord.utils.get(guild.roles, name=badge)
+            if not role:
+                role = await guild.create_role(
+                    name=badge,
+                    color=discord.Color(requirements['color']),
+                    hoist=True
+                )
+            await member.add_roles(role)
+            return True
+    
+    return False

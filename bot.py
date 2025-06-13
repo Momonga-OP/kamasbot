@@ -33,9 +33,14 @@ async def on_ready():
     # Load cogs
     from cogs.panel import PanelCog
     from cogs.tickets import TicketsCog
+    from cogs.verification import VerificationCog
+    from cogs.middleman_verification import MiddlemanVerificationCog
+    from cogs.verification import VerificationCog
     
     await bot.add_cog(PanelCog(bot))
     await bot.add_cog(TicketsCog(bot))
+    await bot.add_cog(VerificationCog(bot))
+    await bot.add_cog(MiddlemanVerificationCog(bot))
     
     # Sync commands
     await bot.tree.sync()
