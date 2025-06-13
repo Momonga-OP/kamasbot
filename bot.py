@@ -3,13 +3,21 @@ import discord
 from discord.ext import commands
 import logging
 import sys
+from pathlib import Path
 
 from config import DISCORD_TOKEN, SERVER_ID
 
-# Setup logging
+# Ensure logs directory exists
+Path("logs").mkdir(exist_ok=True)
+
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("logs/kamasbot.log"),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
