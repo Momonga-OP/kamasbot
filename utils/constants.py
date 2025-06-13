@@ -2,12 +2,13 @@
 
 # Discord server and channel IDs
 SERVER_ID = 1217700740949348443  # Discord server ID
-PANEL_CHANNEL_ID = 1217700740949348446  # Main trading panel channel
-TICKETS_CATEGORY_ID = 1217700740949348449  # Category for ticket channels
-VERIFIED_DATA_CHANNEL_ID = 1217700740949348452  # Channel for storing verification data
-REPUTATION_CHANNEL_ID = 1217700740949348455  # Channel for reputation tracking
-BADGES_CHANNEL_ID = 1217700740949348458  # Channel for badge assignments
-ARCHIVE_CHANNEL_ID = 1217700740949348461  # Channel for archiving transactions
+PANEL_CHANNEL_ID = 1383214622290481252  # Main trading panel channel
+TICKET_CHANNEL_ID = 1383214670348943470  # Channel for creating tickets
+TICKETS_CATEGORY_ID = 1358383554798817410  # Category for ticket channels
+VERIFIED_DATA_CHANNEL_ID = 1383214781162459256  # Channel for storing verification data
+REPUTATION_CHANNEL_ID = 1383214819158786108  # Channel for reputation tracking
+BADGES_CHANNEL_ID = 1383214869926383696  # Channel for badge assignments
+ARCHIVE_CHANNEL_ID = 1383214911378690210  # Channel for archiving transactions
 
 # URLs
 KAMAS_LOGO_URL = "https://static.wikia.nocookie.net/dofus/images/1/1e/Kama.png"
