@@ -1,11 +1,7 @@
 import discord
 from discord import ui
 from discord.ext import commands
-from discord.ui import View, Button
-import os
-import logging
-from ..utils.utils import rate_limited
-
+from utils.utils import rate_limited
 from utils.constants import PANEL_CHANNEL_ID, SERVER_ID
 from utils.utils import (
     parse_kamas_amount, 
