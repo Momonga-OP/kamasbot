@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import ui
 from discord import app_commands
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 import uuid
 import aiohttp
@@ -108,7 +108,7 @@ class KamasModal(ui.Modal):
                 }
                 
             try:
-                price_per_m = float(self.price.value.replace(',', '.'))
+                price_per_m = float(self.price_per_million.value.replace(',', '.'))
             except ValueError:
                 await interaction.response.send_message(
                     "Invalid price format. Please enter a numeric value.",
@@ -450,8 +450,11 @@ class TicketsCog(commands.Cog):
                 if not channel:
                     channel = await self.bot.fetch_channel(TICKET_CHANNEL_ID)
                 
+                now = datetime.now(timezone.utc)
+                archive_cutoff = now - timedelta(days=ARCHIVE_AFTER_DAYS)
+                
                 async for message in channel.history(limit=1000):
-                    if (datetime.now() - message.created_at).days > ARCHIVE_AFTER_DAYS:
+                    if message.created_at < archive_cutoff:
                         await archive_transaction(message)
                         
                 # Check daily
@@ -472,7 +475,7 @@ class TicketsCog(commands.Cog):
                 for escrow in escrows:
                     if escrow['status'] == 'pending':
                         created_at = datetime.fromisoformat(escrow['created_at'])
-                        if (datetime.now() - created_at).total_seconds() > ESCROW_TIMEOUT_HOURS * 3600:
+                        if (datetime.now(timezone.utc) - created_at).total_seconds() > ESCROW_TIMEOUT_HOURS * 3600:
                             # Mark as expired in the file
                             await self.expire_escrow(escrow)
             
@@ -514,7 +517,7 @@ class TicketsCog(commands.Cog):
         while True:
             try:
                 # Wait until next Monday
-                now = datetime.now()
+                now = datetime.now(timezone.utc)
                 next_monday = now + timedelta(days=(7 - now.weekday()))
                 next_monday = next_monday.replace(hour=9, minute=0, second=0, microsecond=0)
                 wait_seconds = (next_monday - now).total_seconds()
@@ -649,7 +652,7 @@ class TicketsCog(commands.Cog):
                             escrow['dispute'] = {
                                 "filed_by": interaction.user.id,
                                 "reason": reason,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": datetime.now(timezone.utc).isoformat()
                             }
                             escrow['status'] = 'disputed'
                             
