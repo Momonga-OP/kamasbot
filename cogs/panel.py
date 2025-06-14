@@ -2,8 +2,8 @@ import logging
 import discord
 from discord import ui, app_commands
 from discord.ext import commands
-from utils.utils import rate_limited
-from utils.constants import PANEL_CHANNEL_ID, SERVER_ID
+from utils.utils import rate_limited, fetch_kamas_logo
+from utils.constants import PANEL_CHANNEL_ID, SERVER_ID, KAMAS_LOGO_URL
 from utils.utils import (
     parse_kamas_amount, 
     format_kamas_amount, 

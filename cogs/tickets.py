@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from utils.utils import archive_transaction, search_archives, generate_market_report
 from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS, ARCHIVE_AFTER_DAYS
 from utils.utils import parse_kamas_amount, format_kamas_amount, store_verification_data, validate_kamas_amount
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -507,6 +508,26 @@ class TicketsCog(commands.Cog):
         except Exception as e:
             logger.error(f"Escrow expiration failed: {e}")
             return False
+
+    async def weekly_market_report(self):
+        """Generate and post weekly market analysis report."""
+        while True:
+            try:
+                # Wait until next Monday
+                now = datetime.now()
+                next_monday = now + timedelta(days=(7 - now.weekday()))
+                next_monday = next_monday.replace(hour=9, minute=0, second=0, microsecond=0)
+                wait_seconds = (next_monday - now).total_seconds()
+                await asyncio.sleep(wait_seconds)
+                
+                # Generate and post report
+                report = await generate_market_report(self.bot)
+                channel = self.bot.get_channel(TICKET_CHANNEL_ID)
+                await channel.send(embed=report)
+                
+            except Exception as e:
+                logger.error(f"Weekly market report failed: {e}")
+                await asyncio.sleep(3600)  # Wait an hour before retrying
 
     @app_commands.command(name="generate_report", description="Generate a market report manually")
     @app_commands.checks.has_permissions(administrator=True)
