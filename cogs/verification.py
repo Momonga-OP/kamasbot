@@ -229,3 +229,21 @@ class RejectionReasonModal(ui.Modal, title="Rejection Reason"):
         except Exception as e:
             logger.exception(f"Error rejecting verification: {e}")
             await interaction.response.send_message("Error processing rejection.", ephemeral=True)
+
+class VerificationCog(commands.Cog):
+    """Cog for handling seller verification functionality."""
+    
+    def __init__(self, bot):
+        self.bot = bot
+        
+    @commands.command()
+    async def verify(self, ctx):
+        """Start the seller verification process."""
+        modal = VerificationModal()
+        await ctx.send_modal(modal)
+        
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def verify_admin(self, ctx):
+        """Admin command to manage verifications."""
+        await ctx.send("Verification admin panel coming soon!")
