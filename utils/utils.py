@@ -8,6 +8,7 @@ from io import BytesIO
 from datetime import datetime
 import discord
 from discord import utils
+from functools import wraps
 
 from config import (
     KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID,
@@ -22,7 +23,7 @@ def rate_limited(window_seconds=60, max_requests=5):
     def decorator(func):
         calls = []
         
-        @utils.wraps(func)
+        @wraps(func)
         async def wrapper(*args, **kwargs):
             now = time.time()
             calls[:] = [call for call in calls if call > now - window_seconds]
