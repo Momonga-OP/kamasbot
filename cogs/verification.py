@@ -5,8 +5,14 @@ from datetime import datetime
 import os
 import logging
 
-from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL, TICKET_CHANNEL_ID
-from utils.utils import fetch_kamas_logo
+from utils.constants import VERIFIED_DATA_CHANNEL_ID, KAMAS_LOGO_URL, TICKET_CHANNEL_ID, VERIFICATION_CHANNEL_ID
+from utils.utils import (
+    parse_kamas_amount, 
+    format_kamas_amount, 
+    validate_kamas_amount,
+    store_verification_data,
+    fetch_kamas_logo
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,12 +113,12 @@ class VerificationModal(ui.Modal, title="Seller Verification Application"):
             admin_embed.add_field(name="Application ID", value=f"`{user_id}`", inline=False)
             admin_embed.set_footer(text=f"Applied on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             
-            ticket_channel = interaction.client.get_channel(TICKET_CHANNEL_ID)
-            if not ticket_channel:
-                ticket_channel = await interaction.client.fetch_channel(TICKET_CHANNEL_ID)
+            verification_channel = interaction.client.get_channel(VERIFICATION_CHANNEL_ID)
+            if not verification_channel:
+                verification_channel = await interaction.client.fetch_channel(VERIFICATION_CHANNEL_ID)
             
             admin_view = VerificationAdminView(user_id)
-            await ticket_channel.send(embed=admin_embed, view=admin_view)
+            await verification_channel.send(embed=admin_embed, view=admin_view)
             
             await interaction.response.send_message(
                 "✅ **Verification Application Submitted!**\n\n"
