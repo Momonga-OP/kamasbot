@@ -1,6 +1,6 @@
 import logging
 import discord
-from discord import ui
+from discord import ui, app_commands
 from discord.ext import commands
 from utils.utils import rate_limited
 from utils.constants import PANEL_CHANNEL_ID, SERVER_ID
