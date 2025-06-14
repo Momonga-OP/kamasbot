@@ -77,9 +77,13 @@ class PanelCog(commands.Cog):
     async def setup_panel(self):
         await self.bot.wait_until_ready()
         try:
+            logger.info(f"Looking for channel with ID: {PANEL_CHANNEL_ID}")
             panel_channel = self.bot.get_channel(PANEL_CHANNEL_ID)
             if not panel_channel:
                 panel_channel = await self.bot.fetch_channel(PANEL_CHANNEL_ID)
+            
+            logger.info(f"Found channel: {panel_channel.name} in guild: {panel_channel.guild}")
+            logger.info(f"Bot permissions in channel: {panel_channel.permissions_for(panel_channel.guild.me)}")
             
             # Clean up old panels
             async for message in panel_channel.history(limit=100):
