@@ -11,10 +11,12 @@ from discord import utils
 from functools import wraps
 
 from config import (
-    KAMAS_LOGO_URL, VERIFIED_DATA_CHANNEL_ID,
+    VERIFIED_DATA_CHANNEL_ID,
     REPUTATION_CHANNEL_ID, BADGES_CHANNEL_ID,
     ARCHIVE_CHANNEL_ID, BADGE_COLORS
 )
+
+from utils.constants import KAMAS_LOGO_URL
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +83,11 @@ def format_kamas_amount(amount_num):
 
 async def fetch_kamas_logo():
     """Returns a BytesIO object with the Kamas logo"""
-    if not config.KAMAS_LOGO_URL:
+    if not KAMAS_LOGO_URL:
         return None
         
     async with aiohttp.ClientSession() as session:
-        async with session.get(config.KAMAS_LOGO_URL) as resp:
+        async with session.get(KAMAS_LOGO_URL) as resp:
             if resp.status == 200:
                 data = await resp.read()
                 return BytesIO(data)
