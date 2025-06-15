@@ -15,6 +15,13 @@ from utils.utils import archive_transaction, search_archives, generate_market_re
 from utils.constants import TICKET_CHANNEL_ID, CURRENCY_SYMBOLS, ARCHIVE_AFTER_DAYS
 from utils.utils import parse_kamas_amount, format_kamas_amount, store_verification_data, validate_kamas_amount
 from datetime import timedelta
+import asyncio
+from collections import deque
+
+# Transaction queue system
+TRANSACTION_QUEUE = deque()
+MAX_TRANSACTIONS = 50  # Maximum active transactions allowed
+QUEUE_CHECK_INTERVAL = 300  # 5 minutes between queue checks
 
 logger = logging.getLogger(__name__)
 
@@ -101,29 +108,39 @@ class KamasModal(ui.Modal):
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            channel = interaction.guild.get_channel(TICKET_CHANNEL_ID) or \
+                     await interaction.guild.fetch_channel(TICKET_CHANNEL_ID)
+            active_threads = len([t for t in channel.threads if not t.archived])
+            
+            if active_threads >= MAX_TRANSACTIONS:
+                TRANSACTION_QUEUE.append((interaction, self))
+                await interaction.response.send_message(
+                    f"⚠️ Currently at capacity ({active_threads}/{MAX_TRANSACTIONS}). "
+                    f"Your position in queue: {len(TRANSACTION_QUEUE)}\n"
+                    "You'll be notified when your transaction can be processed.",
+                    ephemeral=True
+                )
+                logger.info(f"Added transaction to queue (Position: {len(TRANSACTION_QUEUE)})")
+                return
+                
+            await self._process_transaction(interaction)
+            
+        except Exception as e:
+            logger.error(f"Modal submission error: {e}")
+            await interaction.response.send_message(
+                "An error occurred. Please try again later.",
+                ephemeral=True
+            )
+
+    async def _process_transaction(self, interaction):
+        """Handle actual transaction processing"""
+        try:
             # First validate inputs
             if not validate_kamas_amount(self.kamas_amount.value):
                 await interaction.response.send_message(
                     "Invalid kamas amount format. Please use format like '10M' or '500K'.",
                     ephemeral=True
                 )
-                return
-            
-            # Check available space (max 50 active transactions)
-            ticket_channel = interaction.guild.get_channel(TICKET_CHANNEL_ID)
-            if not ticket_channel:
-                ticket_channel = await interaction.guild.fetch_channel(TICKET_CHANNEL_ID)
-                
-            active_threads = len([t for t in ticket_channel.threads if not t.archived])
-            MAX_TRANSACTIONS = 50
-            
-            if active_threads >= MAX_TRANSACTIONS:
-                await interaction.response.send_message(
-                    "⚠️ Currently at maximum capacity. Please try again later.\n"
-                    f"(Max {MAX_TRANSACTIONS} active transactions allowed)",
-                    ephemeral=True
-                )
-                logger.warning(f"Transaction capacity reached ({active_threads}/{MAX_TRANSACTIONS})")
                 return
             
             # Get all input values
@@ -376,6 +393,7 @@ class TicketsCog(commands.Cog):
         self.bot.loop.create_task(self.weekly_market_report())
         self.bot.loop.create_task(self.check_escrow_timeouts())  # Add this line
         self.bot.loop.create_task(self.restore_active_views())
+        self.bot.loop.create_task(self.process_transaction_queue(bot))
     
     async def on_reaction_add(self, reaction, user):
         """Handle reputation updates from reactions."""
@@ -810,3 +828,24 @@ class TicketsCog(commands.Cog):
             )
         
         await interaction.followup.send(embed=embed)
+
+async def process_transaction_queue(bot):
+    """Process queued transactions when space becomes available"""
+    await bot.wait_until_ready()
+    
+    while not bot.is_closed():
+        try:
+            if TRANSACTION_QUEUE:
+                channel = bot.get_channel(TICKET_CHANNEL_ID) or \
+                         await bot.fetch_channel(TICKET_CHANNEL_ID)
+                active_threads = len([t for t in channel.threads if not t.archived])
+                
+                if active_threads < MAX_TRANSACTIONS:
+                    interaction, modal = TRANSACTION_QUEUE.popleft()
+                    await modal._process_transaction(interaction)
+                    logger.info(f"Processed queued transaction (Remaining: {len(TRANSACTION_QUEUE)})")
+            
+            await asyncio.sleep(QUEUE_CHECK_INTERVAL)
+        except Exception as e:
+            logger.error(f"Queue processing error: {e}")
+            await asyncio.sleep(60)
