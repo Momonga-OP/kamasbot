@@ -73,6 +73,18 @@ class VerificationModal(ui.Modal, title="Seller Verification Application"):
                 )
                 return
             
+            try:
+                verification_channel = await interaction.client.fetch_channel(VERIFICATION_CHANNEL_ID)
+                if verification_channel is None:
+                    raise ValueError("Verification channel not found")
+            except Exception as e:
+                logger.error(f"Failed to fetch verification channel: {e}")
+                await interaction.response.send_message(
+                    "⚠️ The verification system is currently unavailable. Please try again later or contact an admin.",
+                    ephemeral=True
+                )
+                return
+            
             platform = self.social_media_type.value.lower().strip()
             valid_platforms = ['twitter', 'instagram', 'facebook']
             
@@ -112,10 +124,6 @@ class VerificationModal(ui.Modal, title="Seller Verification Application"):
             
             admin_embed.add_field(name="Application ID", value=f"`{user_id}`", inline=False)
             admin_embed.set_footer(text=f"Applied on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            verification_channel = interaction.client.get_channel(VERIFICATION_CHANNEL_ID)
-            if not verification_channel:
-                verification_channel = await interaction.client.fetch_channel(VERIFICATION_CHANNEL_ID)
             
             admin_view = VerificationAdminView(user_id)
             await verification_channel.send(embed=admin_embed, view=admin_view)
