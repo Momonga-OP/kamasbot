@@ -105,16 +105,17 @@ async def store_verification_data(interaction, user_id, verification_data):
         if not channel:
             channel = await interaction.client.fetch_channel(VERIFIED_DATA_CHANNEL_ID)
             
+        username = verification_data.get('username', interaction.user.display_name)
         file_content = f"""Verified Seller Information:
 User ID: {user_id}
-Username: {verification_data['username']}
+Username: {username}
 Social Platform: {verification_data['social_platform']}
 Social Handle: {verification_data['social_handle']}
 Trading Experience: {verification_data['trading_experience']}
-Additional Info: {verification_data['additional_info']}
+Additional Info: {verification_data.get('additional_info', 'None')}
 Application Date: {verification_data['application_date']}
-Verified Date: {verification_data['verified_date']}
-Verified By: {verification_data['verified_by']}"""
+Verified Date: {verification_data.get('verified_date', 'Not verified')}
+Verified By: {verification_data.get('verified_by', 'None')}"""
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"verified_seller_{user_id}_{timestamp}.txt"

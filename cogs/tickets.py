@@ -18,6 +18,27 @@ from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
+class CurrencySelect(discord.ui.Select):
+    """Dropdown for selecting currency type."""
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="USD", value="USD", emoji="💵"),
+            discord.SelectOption(label="EUR", value="EUR", emoji="💶"),
+            discord.SelectOption(label="GBP", value="GBP", emoji="💷"),
+            discord.SelectOption(label="CAD", value="CAD", emoji="💵"),
+            discord.SelectOption(label="Other", value="OTHER", emoji="🌐")
+        ]
+        super().__init__(
+            placeholder="Select payment currency...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.view.currency = self.values[0]
+
 class KamasModal(ui.Modal):
     """Modal form for kamas transactions."""
     
@@ -28,6 +49,7 @@ class KamasModal(ui.Modal):
             custom_id=f"kamas_modal_{transaction_type}_{uuid.uuid4()}",
         )
         self.transaction_type = transaction_type
+        self.currency = "USD"  # Default currency
         
         # Define fields with proper names
         self.kamas_amount = ui.TextInput(
@@ -66,12 +88,16 @@ class KamasModal(ui.Modal):
             max_length=500
         )
         
+        # Currency dropdown
+        self.currency_select = CurrencySelect()
+        
         # Add fields to modal
         self.add_item(self.kamas_amount)
         self.add_item(self.price_per_million)
         self.add_item(self.payment_method)
         self.add_item(self.contact_info)
         self.add_item(self.notes)
+        self.add_item(self.currency_select)
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -88,6 +114,7 @@ class KamasModal(ui.Modal):
             payment_method = self.children[2].value
             contact_info = self.children[3].value
             additional_info = self.children[4].value
+            currency = self.children[5].values[0]
             
             # Validate kamas amount
             kamas_amount = parse_kamas_amount(amount)
@@ -125,7 +152,8 @@ class KamasModal(ui.Modal):
                 "contact_info": self.contact_info.value,
                 "additional_info": self.notes.value,
                 "user_id": interaction.user.id,
-                "payment_split": payment_split
+                "payment_split": payment_split,
+                "currency": currency
             }
             
             temp_file_name = f"temp_form_{interaction.user.id}.txt"
