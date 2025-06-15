@@ -101,11 +101,29 @@ class KamasModal(ui.Modal):
     
     async def on_submit(self, interaction: discord.Interaction):
         try:
+            # First validate inputs
             if not validate_kamas_amount(self.kamas_amount.value):
                 await interaction.response.send_message(
                     "Invalid kamas amount format. Please use format like '10M' or '500K'.",
                     ephemeral=True
                 )
+                return
+            
+            # Check available space (max 50 active transactions)
+            ticket_channel = interaction.guild.get_channel(TICKET_CHANNEL_ID)
+            if not ticket_channel:
+                ticket_channel = await interaction.guild.fetch_channel(TICKET_CHANNEL_ID)
+                
+            active_threads = len([t for t in ticket_channel.threads if not t.archived])
+            MAX_TRANSACTIONS = 50
+            
+            if active_threads >= MAX_TRANSACTIONS:
+                await interaction.response.send_message(
+                    "⚠️ Currently at maximum capacity. Please try again later.\n"
+                    f"(Max {MAX_TRANSACTIONS} active transactions allowed)",
+                    ephemeral=True
+                )
+                logger.warning(f"Transaction capacity reached ({active_threads}/{MAX_TRANSACTIONS})")
                 return
             
             # Get all input values

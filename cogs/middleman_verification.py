@@ -36,9 +36,16 @@ class MiddlemanVerificationCog(commands.Cog):
         
         while not self.bot.is_closed():
             try:
-                channel = self.bot.get_channel(MIDDLEMAN_REMINDERS_CHANNEL_ID)
-                if not channel:
-                    channel = await self.bot.fetch_channel(MIDDLEMAN_REMINDERS_CHANNEL_ID)
+                try:
+                    channel = self.bot.get_channel(MIDDLEMAN_REMINDERS_CHANNEL_ID)
+                    if not channel:
+                        channel = await self.bot.fetch_channel(MIDDLEMAN_REMINDERS_CHANNEL_ID)
+                    if channel is None:
+                        raise ValueError("Middleman reminders channel not found")
+                except Exception as e:
+                    logger.error(f"Failed to fetch middleman reminders channel: {e}")
+                    await asyncio.sleep(3600)
+                    continue
                 
                 reminder = (
                     "🔔 **Weekly Middleman Reminder** 🔔\n\n"

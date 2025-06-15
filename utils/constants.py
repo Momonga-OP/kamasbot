@@ -8,6 +8,7 @@ TICKET_CHANNEL_ID = 1383214670348943470  # Channel for creating tickets
 TICKETS_CATEGORY_ID = 1358383554798817410  # Category for ticket channels
 VERIFIED_DATA_CHANNEL_ID = 1383214781162459256  # Channel for storing verification data
 VERIFICATION_CHANNEL_ID = 1383654027765612554  # Channel for verification applications
+MIDDLEMAN_GUIDELINES_CHANNEL_ID = 1383216489565524122  # Channel for middleman guidelines
 REPUTATION_CHANNEL_ID = 1383214819158786108  # Channel for reputation tracking
 BADGES_CHANNEL_ID = 1383214869926383696  # Channel for badge assignments
 ARCHIVE_CHANNEL_ID = 1383214911378690210  # Channel for archiving transactions
